@@ -5,10 +5,11 @@ from rango import views
 from django.conf import settings
 from django.conf.urls.static import static 
 from registration.backends.simple.views import RegistrationView 
+from django.urls import reverse 
 
 class MyRegistrationView(RegistrationView):
     def get_success_url(self, user):
-        return '/rango/'  
+        return reverse('register_profile') 
 
 urlpatterns = [
     path('', views.index, name='index'), 

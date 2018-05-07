@@ -10,6 +10,7 @@ from django.http import HttpResponseRedirect, HttpResponse
 from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from datetime import datetime
+from django.shortcuts import redirect
 
 def index(request):
     request.session.set_test_cookie()
@@ -57,7 +58,7 @@ def show_category(request, category_name_slug):
     context_dict = {}
     try:
         category = Category.objects.get(slug=category_name_slug)
-        pages = Page.objects.filter(category=category)
+        pages = Page.objects.filter(category=category).order_by('-views')
         context_dict['pages'] = pages
         context_dict['category'] = category
     except Category.DoesNotExist:
@@ -149,4 +150,59 @@ def add_page(request, category_name_slug):
 def restricted(request):
 #    return HttpResponse("Since you are logged in, you can see this text!")
     return render(request, 'rango/restricted.html', {})
+ 
+def track_url(request): 
+    page_id = None
+    if request.method == 'GET':
+        if 'page_id' in request.GET:
+            page_id = request.GET['page_id']
+            if page_id:
+                page = Page.objects.get(id=int(page_id))
+                if page:
+                    views = page.views +1
+                    page.views = views
+                    page.save()
+                    return HttpResponseRedirect(page.url)
+    return HttpResponseRedirect(reverse('index'))
 
+@login_required
+def register_profile(request):
+    form = UserProfileForm()
+    if request.method == 'POST':
+        form = UserProfileForm(request.POST, request.FILES)
+        if form.is_valid():
+            user_profile = form.save(commit=False)
+            user_profile.user = request.user
+            user_profile.save()
+            return redirect('index')
+        else:
+            print(form.errors)
+    context_dict = {'form':form}
+    return render(request, 'rango/profile_registration.html', context_dict)
+
+from django.contrib.auth.models import User
+from rango.models import UserProfile
+@login_required
+def profile(request, username):
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return redirect('index')
+    userprofile = UserProfile.objects.get_or_create(user=user)[0]
+    form = UserProfileForm(
+        {'website': userprofile.website, 'picture': userprofile.picture})
+
+    if request.method == 'POST':
+        form = UserProfileForm(request.POST, request.FILES, instance=userprofile)
+        if form.is_valid():
+            form.save(commit=True)
+            return redirect('profile', user.username)
+        else:
+            print(form.errors)
+    return render(request, 'rango/profile.html',
+        {'userprofile': userprofile, 'selecteduser': user, 'form': form})
+
+@login_required
+def list_profiles(request):
+    userprofile_list = UserProfile.objects.all()
+    return render(request, 'rango/list_profiles.html', {'userprofile_list' : userprofile_list})
